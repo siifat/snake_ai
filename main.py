@@ -5,9 +5,6 @@ from typing import List, Tuple, Optional, Set, Dict
 from time import perf_counter
 import pygame
 
-# -----------------------------
-# Global configuration constants
-# -----------------------------
 
 # Grid configuration
 CELL_SIZE = 24
@@ -51,46 +48,37 @@ Cell = Tuple[int, int]
 DIRECTIONS_4: Tuple[Cell, Cell, Cell, Cell] = (UP, DOWN, LEFT, RIGHT)
 
 
-# -----------------------------
-# Helper: Pygame / drawing
-# -----------------------------
+# ------------
+# Game GUI
+# ------------
 def init_pygame_window(width: int, height: int, title: str) -> pygame.Surface:
-    pygame.init()  # initializes display, font, etc.
+    pygame.init()
     pygame.display.set_caption(title)
     screen = pygame.display.set_mode((width, height))
     return screen
 
 def handle_window_events(events) -> bool:
-    """
-    Process OS-level events (like close button) from the shared events list.
-    """
     for event in events:
         if event.type == pygame.QUIT:
             return False
     return True
 
 def wants_restart(events) -> bool:
-    """
-    Return True if the player pressed 'R' this frame.
-    """
     for event in events:
         if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
             return True
     return False
 
-def wants_toggle_mode(events) -> bool:
-    """
-    Return True if the player pressed 'M' this frame.
-    """
+
+def toggle_mode(events) -> bool:
+
     for event in events:
         if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
             return True
     return False
 
+
 def process_manual_input(events) -> Optional[Tuple[int, int]]:
-    """
-    Manual steering: return a requested direction if Arrow/WASD pressed.
-    """
     requested: Optional[Tuple[int, int]] = None
     for event in events:
         if event.type == pygame.KEYDOWN:
@@ -122,9 +110,9 @@ def draw_grid_overlay(screen: pygame.Surface) -> None:
         pygame.draw.line(screen, GRID_COLOR, (0, y), (WINDOW_WIDTH, y), 1)
 
 
-# -----------------------------
+# -------------
 # Snake model
-# -----------------------------
+# -------------
 Snake = List[Cell]
 
 def spawn_snake(initial_len: int = 4) -> Snake:
@@ -155,10 +143,7 @@ def is_opposite(a: Tuple[int, int], b: Tuple[int, int]) -> bool:
 
 
 def next_head_cell(snake: Snake, direction: Tuple[int, int]) -> Cell:
-    """
-    Compute the *next* head position without mutating the snake.
-    Useful for checking collisions/food BEFORE deciding growth.
-    """
+    
     dx, dy = direction
     hx, hy = snake[0]
     return (hx + dx, hy + dy)
@@ -169,9 +154,9 @@ def inside_board(cell: Cell) -> bool:
     return 0 <= x < GRID_COLS and 0 <= y < GRID_ROWS
 
 
-# -----------------------------
+# -------------
 # Food system
-# -----------------------------
+# -------------
 food_cell: Optional[Cell] = None  # current food position
 
 def occupied_cells(snake: Snake) -> Set[Cell]:
@@ -203,9 +188,9 @@ def draw_food(screen: pygame.Surface, cell: Optional[Cell]) -> None:
     pygame.draw.rect(screen, FOOD_COLOR, cell_to_rect(cell))
 
 
-# -----------------------------
-# State API (read-only helpers)
-# -----------------------------
+# ----------
+# State API 
+# ----------
 def get_head(snake: List[Cell]) -> Cell:
     
     return snake[0]
@@ -233,13 +218,12 @@ def neighbors4(cell: Cell) -> List[Cell]:
 
 
 def get_empty_cells(snake: List[Cell]) -> List[Cell]:
-    """Return all cells currently free (not occupied by the snake)."""
     return empty_cells(snake)
 
 
-# -----------------------------
-# Game state (score + flags)
-# -----------------------------
+# ------------
+# Game scores
+# ------------
 snake: Snake = []
 direction: Tuple[int, int] = RIGHT         
 pending_direction: Tuple[int, int] = RIGHT  
@@ -257,17 +241,11 @@ planned_path: List[Cell] = []
 last_bfs_stats: Dict[str, float | int] = {"path_len": 0, "visited": 0, "ms": 0.0}
 
 
-# -----------------------------
-# BFS implementation (pure logic)
-# -----------------------------
+# -----------
+# BFS চালাও!
+# -----------
 def bfs_path_with_stats(start: Cell, goal: Optional[Cell], snake: List[Cell]) -> Optional[List[Cell]]:
-    """
-    Compute the shortest path (as a list of cells) from 'start' to 'goal'
-    using BFS on the current grid. Also populate 'last_bfs_stats' with:
-      - path_len: len(path) or 0 if None
-      - visited: number of unique cells expanded
-      - ms: time in milliseconds for the search
-    """
+    
     global last_bfs_stats
 
     t0 = perf_counter()
@@ -279,7 +257,7 @@ def bfs_path_with_stats(start: Cell, goal: Optional[Cell], snake: List[Cell]) ->
 
     blocked: Set[Cell] = set(snake)
     if snake:
-        blocked.discard(snake[-1])  # tail exception for planning
+        blocked.discard(snake[-1])
 
     q = deque([start])
     parent: dict[Cell, Optional[Cell]] = {start: None}
@@ -291,7 +269,7 @@ def bfs_path_with_stats(start: Cell, goal: Optional[Cell], snake: List[Cell]) ->
         for nb in neighbors4(cur):
             if nb in blocked:
                 continue
-            if nb in parent:  # visited already
+            if nb in parent: 
                 continue
             parent[nb] = cur
             q.append(nb)
@@ -319,12 +297,7 @@ def bfs_path_with_stats(start: Cell, goal: Optional[Cell], snake: List[Cell]) ->
 # Collisions, update & render
 # -----------------------------
 def collides(next_head: Cell, snake: Snake, will_eat: bool) -> bool:
-    """
-    Return True if next_head is a wall hit or a self-collision.
-    Tail exception:
-      - If we are NOT growing (will_eat=False) and next_head == current tail,
-        it's safe (tail moves away this step).
-    """
+    
     if not inside_board(next_head):
         return True
 
@@ -337,19 +310,13 @@ def collides(next_head: Cell, snake: Snake, will_eat: bool) -> bool:
     return False
 
 def direction_from_to(a: Cell, b: Cell) -> Tuple[int, int]:
-    """
-    Convert a move from cell a -> cell b into a direction (dx, dy).
-    Assumes b is a 4-neighbor of a.
-    """
+
     ax, ay = a
     bx, by = b
     return (bx - ax, by - ay)
 
 def choose_safe_fallback_direction() -> Optional[Tuple[int, int]]:
-    """
-    If BFS returns no path, try any neighbor that won't collide THIS step.
-    Returns a direction or None if all moves would collide.
-    """
+    
     hx, hy = get_head(snake)
     for (dx, dy) in DIRECTIONS_4:
         nxt = (hx + dx, hy + dy)
@@ -359,25 +326,18 @@ def choose_safe_fallback_direction() -> Optional[Tuple[int, int]]:
     return None
 
 def update_step() -> None:
-    """
-    Advance the game logic exactly one tick (unless game over):
-      1) PLAN: compute BFS path (for preview + metrics).
-      2) DECIDE: If AI mode, pick next direction from path or use fallback.
-                 If Manual, 'pending_direction' was set by keyboard.
-      3) Apply direction safely (no 180° reversals).
-      4) Predict outcome & move (+growth if eating). Update score/food.
-    """
+    
     global snake, direction, pending_direction, food_cell, game_over, score, planned_path
 
     if game_over:
-        return  # freeze logic while game over
+        return
 
-    # 1) PLAN (always compute so metrics/HUD are visible in both modes)
+    
     start = get_head(snake)
     goal = get_food_cell()
     planned_path = bfs_path_with_stats(start, goal, snake) or []
 
-    # 2) DECIDE: AI chooses direction; Manual uses keyboard-requested direction
+    
     if mode == MODE_AI:
         if planned_path:
             next_cell = planned_path[0]
@@ -386,13 +346,13 @@ def update_step() -> None:
             fallback = choose_safe_fallback_direction()
             if fallback is not None:
                 pending_direction = fallback
-            # else keep current direction even if it may collide (no safe move)
+            
 
-    # 3) Apply direction safely at step boundary
+    
     if not is_opposite(direction, pending_direction):
         direction = pending_direction
 
-    # 4) Predict & move
+    # Predict & move
     nxt = next_head_cell(snake, direction)
     will_eat = (food_cell is not None) and (nxt == food_cell)
 
@@ -406,12 +366,11 @@ def update_step() -> None:
         score += 1
         food_cell = spawn_food(snake)
         if food_cell is None:
-            game_over = True  # win: board filled
+            game_over = True
+
 
 def draw_hud(screen: pygame.Surface) -> None:
-    """
-    Draw score, mode, and BFS metrics.
-    """
+    
     font = pygame.font.SysFont(None, 24)
     mode_txt = f"Mode: {mode}"
     bfs_txt = f"Path: {last_bfs_stats['path_len']}  Visited: {last_bfs_stats['visited']}  t: {last_bfs_stats['ms']:.2f} ms"
@@ -419,15 +378,14 @@ def draw_hud(screen: pygame.Surface) -> None:
     surf = font.render(text, True, HUD_COLOR)
     screen.blit(surf, (8, 6))
 
+
 def draw_game_over_overlay(screen: pygame.Surface) -> None:
-    """
-    Simple centered 'Game Over' text.
-    """
+    
     font_big = pygame.font.SysFont(None, 48)
     font_small = pygame.font.SysFont(None, 24)
 
     msg = "GAME OVER"
-    instr = "Press R to Restart"
+    instr = "R to Restart"
 
     surf1 = font_big.render(msg, True, GAME_OVER_COLOR)
     surf2 = font_small.render(instr, True, HUD_COLOR)
@@ -438,20 +396,20 @@ def draw_game_over_overlay(screen: pygame.Surface) -> None:
     screen.blit(surf1, rect1)
     screen.blit(surf2, rect2)
 
+
 def draw_path_overlay(screen: pygame.Surface, path: List[Cell]) -> None:
-    """
-    Draw the planned BFS path as thin outlines so we can see the intended route.
-    """
+    
     if not SHOW_PATH or not path:
         return
     for cell in path:
         pygame.draw.rect(screen, PATH_COLOR, cell_to_rect(cell), width=2)
 
+
 def render(screen: pygame.Surface) -> None:
     draw_background(screen)
     draw_grid_overlay(screen)
     draw_food(screen, food_cell)
-    draw_path_overlay(screen, planned_path)  # plan first so snake draws on top
+    draw_path_overlay(screen, planned_path)
     draw_snake(screen, snake)
     draw_hud(screen)
     if game_over:
@@ -463,12 +421,9 @@ def render(screen: pygame.Surface) -> None:
 # Boot, restart, main loop
 # -----------------------------
 def restart_game() -> None:
-    """
-    Reset all runtime state to initial conditions.
-    """
+    
     global snake, direction, pending_direction, food_cell, game_over, score, planned_path, last_bfs_stats
 
-    # random.seed(42)  # optional determinism for demos
     snake = spawn_snake(initial_len=INITIAL_LEN)
     direction = RIGHT
     pending_direction = RIGHT
@@ -477,6 +432,7 @@ def restart_game() -> None:
     score = 0
     planned_path = []
     last_bfs_stats = {"path_len": 0, "visited": 0, "ms": 0.0}
+
 
 def main() -> int:
     global mode, pending_direction
@@ -502,7 +458,7 @@ def main() -> int:
             restart_game()
 
         # Toggle mode on 'M'
-        if wants_toggle_mode(events):
+        if toggle_mode(events):
             mode = MODE_MANUAL if mode == MODE_AI else MODE_AI
 
         # Manual input only affects pending_direction in Manual mode
