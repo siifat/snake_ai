@@ -1,3 +1,21 @@
+"""
+main.py — Step 11: Manual ⇄ AI toggle + BFS metrics overlay
+
+Purpose:
+- Let the player toggle between Manual and AI (BFS) control with 'M'.
+- Show BFS metrics (path length, visited nodes, time in ms) in the HUD.
+- Keep the same fixed-step loop, collision rules, and food system.
+
+Controls:
+- M: Toggle Manual/AI
+- R: Restart
+- Arrows/WASD: steer (Manual mode only)
+
+Design:
+- One control pathway: 'pending_direction' is set by either keyboard (Manual)
+  or the AI step (BFS). The actual direction is safely applied at step time.
+"""
+
 import sys
 import random
 from collections import deque
@@ -128,12 +146,21 @@ def draw_grid_overlay(screen: pygame.Surface) -> None:
 Snake = List[Cell]
 
 def spawn_snake(initial_len: int = 4) -> Snake:
+    """
+    Create a short snake near the center, horizontal, facing RIGHT.
+    Head is the first element.
+    """
     cx = GRID_COLS // 2
     cy = GRID_ROWS // 2
     return [(cx - i, cy) for i in range(initial_len)]
 
 def step_snake_move(snake: Snake, direction: Tuple[int, int], grow: bool = False) -> None:
-    
+    """
+    Move the snake forward by one cell in the given direction.
+    - If grow=False: pop the tail (length unchanged).
+    - If grow=True: keep the tail (length increases by 1).
+    Mutates the 'snake' list in-place.
+    """
     dx, dy = direction
     head_x, head_y = snake[0]
     new_head = (head_x + dx, head_y + dy)
@@ -141,18 +168,18 @@ def step_snake_move(snake: Snake, direction: Tuple[int, int], grow: bool = False
     if not grow:
         snake.pop()
 
-
 def draw_snake(screen: pygame.Surface, snake: Snake) -> None:
     if not snake:
         return
     pygame.draw.rect(screen, SNAKE_HEAD_COLOR, cell_to_rect(snake[0]))
-    for snk in snake[1:]:
-        pygame.draw.rect(screen, SNAKE_BODY_COLOR, cell_to_rect(snk))
-
+    for seg in snake[1:]:
+        pygame.draw.rect(screen, SNAKE_BODY_COLOR, cell_to_rect(seg))
 
 def is_opposite(a: Tuple[int, int], b: Tuple[int, int]) -> bool:
+    """
+    Return True if direction b is the exact opposite of direction a.
+    """
     return (a[0] == -b[0]) and (a[1] == -b[1])
-
 
 def next_head_cell(snake: Snake, direction: Tuple[int, int]) -> Cell:
     """
@@ -163,8 +190,10 @@ def next_head_cell(snake: Snake, direction: Tuple[int, int]) -> Cell:
     hx, hy = snake[0]
     return (hx + dx, hy + dy)
 
-
-def inside_board(cell: Cell) -> bool:
+def in_bounds(cell: Cell) -> bool:
+    """
+    True if cell is inside the board rectangle.
+    """
     x, y = cell
     return 0 <= x < GRID_COLS and 0 <= y < GRID_ROWS
 
@@ -175,27 +204,27 @@ def inside_board(cell: Cell) -> bool:
 food_cell: Optional[Cell] = None  # current food position
 
 def occupied_cells(snake: Snake) -> Set[Cell]:
-
+    """Return a set of all cells currently occupied by the snake."""
     return set(snake)
 
-
 def all_board_cells() -> List[Cell]:
-    
+    """List all valid cells on the board."""
     return [(x, y) for x in range(GRID_COLS) for y in range(GRID_ROWS)]
 
-
 def empty_cells(snake: Snake) -> List[Cell]:
-    
+    """All cells not currently occupied by the snake."""
     occ = occupied_cells(snake)
     return [c for c in all_board_cells() if c not in occ]
 
 def spawn_food(snake: Snake) -> Optional[Cell]:
-    
+    """
+    Place food on a random empty cell. If there are no empty cells (snake fills
+    the board), return None (edge case: "win" state).
+    """
     candidates = empty_cells(snake)
     if not candidates:
         return None
     return random.choice(candidates)
-
 
 def draw_food(screen: pygame.Surface, cell: Optional[Cell]) -> None:
     if cell is None:
@@ -207,30 +236,29 @@ def draw_food(screen: pygame.Surface, cell: Optional[Cell]) -> None:
 # State API (read-only helpers)
 # -----------------------------
 def get_head(snake: List[Cell]) -> Cell:
-    
+    """Return the head cell (assumes snake is non-empty)."""
     return snake[0]
 
 def get_body(snake: List[Cell]) -> List[Cell]:
-    
+    """Return a copy of body cells (excluding head)."""
     return list(snake[1:])
 
 def get_food_cell() -> Optional[Cell]:
-    
+    """Expose current food cell (None if no food, e.g., board filled)."""
     return food_cell
 
 def is_occupied(cell: Cell, snake: List[Cell]) -> bool:
-    
+    """True if 'cell' is currently occupied by any part of the snake."""
     return cell in snake
-
 
 def neighbors4(cell: Cell) -> List[Cell]:
     """
-    Manhattan distance ব্যবহার
+    Return the 4-way (Manhattan) neighbors *within bounds*.
+    This is the canonical adjacency for BFS/A* on a grid.
     """
     x, y = cell
     nbrs = [(x + dx, y + dy) for (dx, dy) in DIRECTIONS_4]
-    return [c for c in nbrs if inside_board(c)]
-
+    return [c for c in nbrs if in_bounds(c)]
 
 def get_empty_cells(snake: List[Cell]) -> List[Cell]:
     """Return all cells currently free (not occupied by the snake)."""
@@ -241,8 +269,8 @@ def get_empty_cells(snake: List[Cell]) -> List[Cell]:
 # Game state (score + flags)
 # -----------------------------
 snake: Snake = []
-direction: Tuple[int, int] = RIGHT         
-pending_direction: Tuple[int, int] = RIGHT  
+direction: Tuple[int, int] = RIGHT          # currently applied direction
+pending_direction: Tuple[int, int] = RIGHT  # chosen by Manual or AI each tick
 game_over: bool = False
 score: int = 0
 INITIAL_LEN: int = 4
@@ -325,7 +353,7 @@ def collides(next_head: Cell, snake: Snake, will_eat: bool) -> bool:
       - If we are NOT growing (will_eat=False) and next_head == current tail,
         it's safe (tail moves away this step).
     """
-    if not inside_board(next_head):
+    if not in_bounds(next_head):
         return True
 
     if next_head in snake:
